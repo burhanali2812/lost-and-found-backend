@@ -315,20 +315,35 @@ router.get("/getAllUser", authMiddleWare, async (req, res) => {
 
 router.post("/login", async (req, res) => {
   const { email, password, cnic, loginType } = req.body;
+
   try {
+    if (loginType === "email" && !email)
+      return res.status(400).json({ message: "Email is required" });
+
+    if (loginType === "cnic" && !cnic)
+      return res.status(400).json({ message: "CNIC is required" });
+
+    if (!password)
+      return res.status(400).json({ message: "Password is required" });
+
     let user;
     if (loginType === "email") {
       user = await User.findOne({ email });
     } else if (loginType === "cnic") {
       user = await User.findOne({ cnic });
     }
-    if (!user) return res.status(400).json({ message: "User not found" });
+
+    if (!user)
+      return res.status(400).json({ message: "User not found" });
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch)
       return res.status(400).json({ message: "Invalid credentials" });
+
     const token = jwt.sign({ id: user._id }, process.env.SECRET_KEY, {
       expiresIn: "2h",
     });
+
     res.json({
       message: "Login Successful",
       success: true,
@@ -338,9 +353,11 @@ router.post("/login", async (req, res) => {
       role: user.role,
     });
   } catch (error) {
+    console.error("Login error:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
+
 router.get("/search-found", authMiddleWare, async (req, res) => {
   try {
     const { city, category } = req.query;
