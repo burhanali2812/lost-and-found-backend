@@ -206,7 +206,7 @@ router.post(
             body: JSON.stringify({
               userId: user._id,
               title: "Account Verification Pending – Stay Updated!",
-              message: "Thank you for registering...", // your full message here
+              message:   "Thank you for registering with us! Your account is currently under review by our admin team to ensure all details are accurate and complete. Please be assured that we are working diligently to process your request. To stay informed on the status of your account, we encourage you to check back daily for updates on your verification process. We appreciate your patience and look forward to providing you with an exceptional experience once your account is fully verified. Regards, The Lost and Found Team", // your full message here
             }),
           }
         );
