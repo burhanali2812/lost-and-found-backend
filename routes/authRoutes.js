@@ -13,6 +13,7 @@ const Notifications = require("../model/Notifications");
 const axios = require("axios");
 const { v2: cloudinary } = require("cloudinary");
 const streamifier = require("streamifier");
+const sharp = require("sharp");
 
 // Configure Cloudinary
 cloudinary.config({
@@ -164,8 +165,24 @@ router.post(
       const uploadFile = async (file) => {
         if (!file) return null;
         try {
+          const mimetype = file[0].mimetype;
+          let compressedBuffer;
+
+          const image = sharp(file[0].buffer).resize({ width: 1024 });
+
+          if (mimetype === "image/jpeg" || mimetype === "image/jpg") {
+            compressedBuffer = await image.jpeg({ quality: 70 }).toBuffer();
+          } else if (mimetype === "image/png") {
+            compressedBuffer = await image.png({ quality: 80 }).toBuffer();
+          } else if (mimetype === "image/webp") {
+            compressedBuffer = await image.webp({ quality: 75 }).toBuffer();
+          } else {
+            // fallback to jpeg
+            compressedBuffer = await image.jpeg({ quality: 70 }).toBuffer();
+          }
+
           const result = await uploadToCloudinary(
-            file[0].buffer,
+            compressedBuffer,
             "lost-and-found/user-documents"
           );
           return result.secure_url;
@@ -206,7 +223,8 @@ router.post(
             body: JSON.stringify({
               userId: user._id,
               title: "Account Verification Pending – Stay Updated!",
-              message:   "Thank you for registering with us! Your account is currently under review by our admin team to ensure all details are accurate and complete. Please be assured that we are working diligently to process your request. To stay informed on the status of your account, we encourage you to check back daily for updates on your verification process. We appreciate your patience and look forward to providing you with an exceptional experience once your account is fully verified. Regards, The Lost and Found Team", // your full message here
+              message:
+                "Thank you for registering with us! Your account is currently under review by our admin team to ensure all details are accurate and complete. Please be assured that we are working diligently to process your request. To stay informed on the status of your account, we encourage you to check back daily for updates on your verification process. We appreciate your patience and look forward to providing you with an exceptional experience once your account is fully verified. Regards, The Lost and Found Team", // your full message here
             }),
           }
         );
