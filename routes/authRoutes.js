@@ -28,16 +28,20 @@ const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 // Helper function to upload to Cloudinary
-const uploadToCloudinary = (fileBuffer, folder) => {
+const uploadToCloudinary = async (buffer, folder) => {
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
-      { folder, resource_type: 'auto' },
+      { folder },
       (error, result) => {
-        if (error) reject(error);
-        else resolve(result);
+        if (error) return reject(error);
+        resolve(result);
       }
     );
-    streamifier.createReadStream(fileBuffer).pipe(uploadStream);
+
+    // Create a readable stream from buffer
+    const { Readable } = require('stream');
+    const stream = Readable.from(buffer);
+    stream.pipe(uploadStream);
   });
 };
 router.post("/upload", upload.single("image"), authMiddleWare, async (req, res) => {
@@ -93,71 +97,61 @@ router.delete("/delete-image/:id", authMiddleWare, async (req, res) => {
 });
 router.post('/signup', upload.fields([{ name: "profileImage" }, { name: "frontCnic" }, { name: "backCnic" }]), async (req, res) => {
     const { name, email, password, phone, cnic, address, token } = req.body;
-      console.log("Form Data:");
-    console.log("Name:", name);
-    console.log("Email:", email);
-    console.log("Password:", password); // ⚠️ Don't log passwords in production
-    console.log("Phone:", phone);
-    console.log("CNIC:", cnic);
-    console.log("Address:", address);
-    console.log("reCAPTCHA Token:", token);
-
-    // Log uploaded files
-    console.log("Uploaded Files:", req.files);
-
+    
+    // Basic validation
     if (!name || !email || !password || !phone || !cnic || !address || !token) {
-    return res.status(400).json({ success: false, message: 'All fields are required' });
-}
-
+        return res.status(400).json({ success: false, message: 'All fields are required' });
+    }
 
     try {
-        // Step 1: Verify reCAPTCHA
-        // const response = await axios.post(
-        //     `https://www.google.com/recaptcha/api/siteverify`,
-        //     null,
-        //     {
-        //         params: {
-        //             secret: process.env.RECAPTCHA_SECRET,
-        //             response: token,
-        //         },
-        //     }
-        // );
+        // Verify reCAPTCHA
+        const response = await axios.post(
+            `https://www.google.com/recaptcha/api/siteverify`,
+            null,
+            {
+                params: {
+                    secret: process.env.RECAPTCHA_SECRET,
+                    response: token,
+                },
+            }
+        );
 
-        // const verificationResult = response.data;
-
-        // // Step 2: If reCAPTCHA fails, return response and stop
-        // if (!verificationResult.success) {
-        //     return res.status(400).json({ success: false, message: 'reCAPTCHA failed' });
-        // }
-
-        // Step 3: Check if email or CNIC already exists
-        const existingEmail = await User.findOne({ email });
-        if (existingEmail) {
-            return res.status(400).json({ message: "Email is already registered" });
+        if (!response.data.success) {
+            return res.status(400).json({ success: false, message: 'reCAPTCHA failed' });
         }
 
-        const existingCnic = await User.findOne({ cnic });
-        if (existingCnic) {
-            return res.status(400).json({ message: "CNIC is already registered" });
-        }
+        // Check for existing user
+        const [existingEmail, existingCnic] = await Promise.all([
+            User.findOne({ email }),
+            User.findOne({ cnic })
+        ]);
 
-        // Step 4: Hash password and save user to database
+        if (existingEmail) return res.status(400).json({ message: "Email is already registered" });
+        if (existingCnic) return res.status(400).json({ message: "CNIC is already registered" });
+
+        // Hash password
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-         const uploadFile = async (file) => {
-      if (!file) return null;
-      const result = await uploadToCloudinary(file[0].buffer, 'lost-and-found/user-documents');
-      return result.secure_url;
-    };
+        // Upload files to Cloudinary
+        const uploadFile = async (file) => {
+            if (!file) return null;
+            try {
+                const result = await uploadToCloudinary(file[0].buffer, 'lost-and-found/user-documents');
+                return result.secure_url;
+            } catch (uploadError) {
+                console.error('Cloudinary upload error:', uploadError);
+                throw new Error('Failed to upload document');
+            }
+        };
 
-    const [profileImage, frontCnic, backCnic] = await Promise.all([
-      uploadFile(req.files["profileImage"]),
-      uploadFile(req.files["frontCnic"]),
-      uploadFile(req.files["backCnic"])
-    ]);
+        const [profileImage, frontCnic, backCnic] = await Promise.all([
+            uploadFile(req.files["profileImage"]),
+            uploadFile(req.files["frontCnic"]),
+            uploadFile(req.files["backCnic"])
+        ]);
 
-        // Create the new user
+        // Create user
         const user = new User({
             name, email, password: hashedPassword, phone, cnic, address,
             profileImage, frontCnic, backCnic
@@ -165,28 +159,33 @@ router.post('/signup', upload.fields([{ name: "profileImage" }, { name: "frontCn
 
         await user.save();
 
-        // Step 5: Send notification
-        const newResponse = await fetch(`http://localhost:5000/auth/pushNotification`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                userId: user._id,
-                title: 'Account Verification Pending – Stay Updated!',
-                message: 'Thank you for registering with us! Your account is currently under review by our admin team to ensure all details are accurate and complete. Please be assured that we are working diligently to process your request. To stay informed on the status of your account, we encourage you to check back daily for updates on your verification process. We appreciate your patience and look forward to providing you with an exceptional experience once your account is fully verified. Regards, The Lost and Found Team',
-            }),
-        });
+        // Send notification
+        try {
+            const newResponse = await fetch(`http://localhost:5000/auth/pushNotification`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: user._id,
+                    title: 'Account Verification Pending – Stay Updated!',
+                    message: 'Thank you for registering...' // your full message here
+                }),
+            });
 
-        if (!newResponse.ok) {
-            return res.status(500).json({ success: false, message: 'Notification failed to send'});
+            if (!newResponse.ok) {
+                console.error('Notification failed:', await newResponse.text());
+            }
+        } catch (notificationError) {
+            console.error('Notification error:', notificationError);
         }
 
-        // Final response
-        res.status(201).json({ success: true, message: 'Account created successfully and notification sent', user });
+        res.status(201).json({ success: true, message: 'Account created successfully', user });
     } catch (error) {
         console.error('Signup error:', error);
-        res.status(500).json({ success: false, message: 'Signup failed' });
+        res.status(500).json({ 
+            success: false, 
+            message: error.message || 'Signup failed',
+            error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 });
 
@@ -482,7 +481,7 @@ router.post('/pushNotification',async (req, res) => {
         res.status(500).json({ message: "Error adding Notification", error });
     }
 })
-router.get('/get-notifications/:userId', authMiddleWare, async (req, res) => {
+router.get('/get-notifications/:userId', async (req, res) => {
     const { userId } = req.params;
     try {
         const notifications = await Notifications.find({ userId })
