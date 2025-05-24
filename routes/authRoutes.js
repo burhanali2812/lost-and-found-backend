@@ -111,10 +111,9 @@ cloudinary.config({
 
 
 
-// Configure multer to use memory storage
+
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Helper function to upload to Cloudinary
 const uploadToCloudinary = async (buffer, folder) => {
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
@@ -124,8 +123,6 @@ const uploadToCloudinary = async (buffer, folder) => {
         resolve(result);
       }
     );
-
-    // Create a readable stream from buffer
     const { Readable } = require("stream");
     const stream = Readable.from(buffer);
     stream.pipe(uploadStream);
@@ -336,25 +333,37 @@ router.post(
   }
 );
 
-router.delete("/deleteUser/:userId", async (req, res) => {
+router.delete("/deleteUser/:userId", authMiddleWare, async (req, res) => {
   try {
     const { userId } = req.params;
+    const loggedInUser = req.user; // full user object from auth middleware
 
-    const user = await User.findById(userId);
-
-    if (!user) {
+    const userToDelete = await User.findById(userId);
+    if (!userToDelete) {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // ❌ Prevent non-admin from deleting others
+    if (loggedInUser.role !== "admin" && loggedInUser._id.toString() !== userId) {
+      return res.status(403).json({ message: "Access denied. You can only delete your own account." });
+    }
+
+    // ❌ Prevent users from deleting admins
+    if (userToDelete.role === "admin" && loggedInUser.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. You cannot delete an admin." });
+    }
+
     await User.findByIdAndDelete(userId);
-    res.json({ message: "Deleted Successfully" });
+    res.json({ message: "User deleted successfully." });
+
   } catch (error) {
     console.error("Error deleting user:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-router.get("/getUser/:id", async (req, res) => {
+
+router.get("/getUser/:id", authMiddleWare,async (req, res) => {
   try {
     const { id } = req.params;
     const user = await User.findById(id);
@@ -503,7 +512,7 @@ router.post("/get-foundItemsByIds", authMiddleWare, async (req, res) => {
     res.status(500).json({ success: false, message: "Error fetching items" });
   }
 });
-router.get("/get-foundItemById/:id", async (req, res) => {
+router.get("/get-foundItemById/:id",authMiddleWare, async (req, res) => {
   const { id } = req.params;
   try {
     const foundItem = await FoundItems.findById(id); // correct method
@@ -580,7 +589,7 @@ router.post(
   }
 );
 
-router.put("/verifyLostItems/:id", async (req, res) => {
+router.put("/verifyLostItems/:id", authMiddleWare,async (req, res) => {
   const { id } = req.params;
   const { request } = req.body;
 
@@ -606,7 +615,7 @@ router.put("/verifyLostItems/:id", async (req, res) => {
   }
 });
 
-router.put("/verifyFoundItems/:id", async (req, res) => {
+router.put("/verifyFoundItems/:id", authMiddleWare,async (req, res) => {
   const { id } = req.params;
   const { request } = req.body;
 
@@ -698,7 +707,7 @@ router.post("/pushNotification", async (req, res) => {
     res.status(500).json({ message: "Error adding Notification", error });
   }
 });
-router.get("/get-notifications/:userId", async (req, res) => {
+router.get("/get-notifications/:userId", authMiddleWare,async (req, res) => {
   const { userId } = req.params;
   try {
     const notifications = await Notifications.find({ userId }).sort({
@@ -775,7 +784,7 @@ router.get("/get-lostItems", authMiddleWare, async (req, res) => {
     res.status(500).json({ success: false, message: "Error searching items" });
   }
 });
-router.post("/postSavedItems", async (req, res) => {
+router.post("/postSavedItems",authMiddleWare, async (req, res) => {
   const { userId, itemId } = req.body;
   try {
     const savedItems = new SavedItems({
@@ -788,7 +797,7 @@ router.post("/postSavedItems", async (req, res) => {
     res.status(500).json({ message: "Error adding SavedItems", error });
   }
 });
-router.get("/get-savedItems", async (req, res) => {
+router.get("/get-savedItems", authMiddleWare,async (req, res) => {
   try {
     const saveditems = await SavedItems.find().sort({ createdAt: -1 });
     res.json({ success: true, saveditems });
@@ -798,7 +807,7 @@ router.get("/get-savedItems", async (req, res) => {
       .json({ success: false, message: "Error searching saved items" });
   }
 });
-router.put("/delete-savedItems/:id", async (req, res) => {
+router.put("/delete-savedItems/:id", authMiddleWare,async (req, res) => {
   const { id } = req.params;
   try {
     const saveditems = await SavedItems.findByIdAndUpdate(

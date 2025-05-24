@@ -11,14 +11,13 @@ const authMiddleWare = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token.split(" ")[1], process.env.SECRET_KEY);
 
-    // 🔽 Fetch the full user from the database
     const user = await User.findById(decoded.id);
 
     if (!user) {
       return res.status(401).json({ success: false, message: "User not found." });
     }
 
-    req.user = user; // ✅ Attach the full user object
+    req.user = user; 
     next();
   } catch (error) {
     res.status(401).json({ success: false, message: "Invalid token." });
