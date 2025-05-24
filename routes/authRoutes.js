@@ -49,7 +49,7 @@ router.post("/send-otp", async (req, res) => {
   const mailOptions = {
     from: `"Verify OTP" <${process.env.SMTP_USER}>`,
     to: email,
-    subject: "Your OTP Code",
+    subject: "OTP For Lost and Found Authentication",
     html: `
     <div style="font-family: system-ui, sans-serif, Arial; font-size: 16px; color: #333; max-width: 600px; margin: auto; padding: 24px; background-color: #f9f9f9; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
       <p style="border-top: 1px solid #eaeaea; padding-top: 16px;">
