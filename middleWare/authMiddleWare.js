@@ -1,17 +1,25 @@
 const jwt = require("jsonwebtoken");
+const User = require("../model/User"); // Make sure the path is correct
 
-const authMiddleWare = (req, res, next) => {
-  const token = req.header("Authorization"); // This gets the "Authorization" header
-  
+const authMiddleWare = async (req, res, next) => {
+  const token = req.header("Authorization");
+
   if (!token) {
     return res.status(401).json({ success: false, message: "Access denied. No token provided." });
   }
 
   try {
-    // Split the "Bearer" prefix and verify the token
     const decoded = jwt.verify(token.split(" ")[1], process.env.SECRET_KEY);
-    req.user = decoded.id;  // Attach the user id to the request
-    next();  // Proceed to the next middleware/route handler
+
+    // 🔽 Fetch the full user from the database
+    const user = await User.findById(decoded.id);
+
+    if (!user) {
+      return res.status(401).json({ success: false, message: "User not found." });
+    }
+
+    req.user = user; // ✅ Attach the full user object
+    next();
   } catch (error) {
     res.status(401).json({ success: false, message: "Invalid token." });
   }

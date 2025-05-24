@@ -374,6 +374,11 @@ router.put("/verifyUser/:id", authMiddleWare, async (req, res) => {
     const { id } = req.params;
     const { isVerified, message } = req.body;
 
+    // ✅ Check if the current user is admin
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. Admins only." });
+    }
+
     const user = await User.findById(id);
     if (!user) return res.status(404).json({ message: "User not found" });
 
@@ -383,12 +388,13 @@ router.put("/verifyUser/:id", authMiddleWare, async (req, res) => {
       { new: true }
     );
 
-    res.json({ message: "User Status updated!" });
+    res.json({ message: "User status updated!" });
   } catch (error) {
-    console.error("Error fetching user:", error);
+    console.error("Error verifying user:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
+
 router.get("/getAllUser", authMiddleWare, async (req, res) => {
   try {
     const user = await User.find();
