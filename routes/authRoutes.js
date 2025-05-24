@@ -343,12 +343,12 @@ router.delete("/deleteUser/:userId", authMiddleWare, async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // ❌ Prevent non-admin from deleting others
+    //  Prevent non-admin from deleting others
     if (loggedInUser.role !== "admin" && loggedInUser._id.toString() !== userId) {
       return res.status(403).json({ message: "Access denied. You can only delete your own account." });
     }
 
-    // ❌ Prevent users from deleting admins
+    //  Prevent users from deleting admins
     if (userToDelete.role === "admin" && loggedInUser.role !== "admin") {
       return res.status(403).json({ message: "Access denied. You cannot delete an admin." });
     }
@@ -406,13 +406,19 @@ router.put("/verifyUser/:id", authMiddleWare, async (req, res) => {
 
 router.get("/getAllUser", authMiddleWare, async (req, res) => {
   try {
-    const user = await User.find();
-    res.json({ user });
+    // Ensure only admins can access
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. Admins only." });
+    }
+
+    const users = await User.find();
+    res.json({ users });
   } catch (error) {
-    console.error("Error fetching user:", error);
+    console.error("Error fetching users:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 router.post("/login", async (req, res) => {
   const { email, password, cnic, loginType } = req.body;
