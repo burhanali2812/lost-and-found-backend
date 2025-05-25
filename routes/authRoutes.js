@@ -418,6 +418,40 @@ router.get("/getAllUser", authMiddleWare, async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+router.post("/getUserEmail",  async (req, res) => {
+    const{email}= req.body;
+  try {
+    const user = await User.findOne({email});
+    if(user){
+        const token = jwt.sign({ email }, process.env.SECRET_KEY, { expiresIn: "15m" });
+         res.json({success: true, name: user.name, token});
+    }else {
+      res.json({ success: false, message: "User not found" });
+    }
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+router.post("/reset-password", async (req, res) => {
+  const { token, newPassword } = req.body;
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findOne({ email: decoded.email });
+
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    await user.save();
+
+    res.json({ success: true, message: "Password changed successfully" });
+
+  } catch (err) {
+    return res.status(400).json({ success: false, message: "Invalid or expired token" });
+  }
+});
 
 
 router.post("/login", async (req, res) => {
