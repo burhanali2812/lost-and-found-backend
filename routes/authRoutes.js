@@ -435,9 +435,7 @@ router.post("/getUserEmail",  async (req, res) => {
 });
 router.post("/reset-password", async (req, res) => {
   const { token, newPassword } = req.body;
-   if (req.user.id !== id) {
-    return res.status(403).json({ message: "Forbidden " });
-  }
+  
 
   try {
     const decoded = jwt.verify(token, process.env.SECRET_KEY);
