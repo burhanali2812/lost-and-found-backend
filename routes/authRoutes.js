@@ -440,7 +440,7 @@ router.post("/reset-password", async (req, res) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.SECRET_KEY);
     const user = await User.findOne({ email: decoded.email });
 
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
