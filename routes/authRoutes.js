@@ -90,6 +90,7 @@ router.post("/send-otp", async (req, res) => {
     res.status(500).send("Failed to send OTP");
   }
 });
+
 router.post("/verify-otp", (req, res) => {
   const { email, otp } = req.body;
 
@@ -108,9 +109,6 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
   secure: true,
 });
-
-
-
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -296,8 +294,13 @@ router.post(
 
       await user.save();
 
-      // Send notification
+      // Send notification and email
+      const title = "Account Verification Pending – Stay Updated!";
+      const message =
+        "Thank you for registering with us! Your account is currently under review by our admin team to ensure all details are accurate and complete. Please be assured that we are working diligently to process your request. To stay informed on the status of your account, we encourage you to check back daily for updates on your verification process. We appreciate your patience and look forward to providing you with an exceptional experience once your account is fully verified.<br><br>Regards,<br>The Lost and Found Team";
+
       try {
+        // Trigger internal notification
         const newResponse = await fetch(
           `https://lost-and-found-backend-xi.vercel.app/auth/pushNotification`,
           {
@@ -305,9 +308,8 @@ router.post(
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               userId: user._id,
-              title: "Account Verification Pending – Stay Updated!",
-              message:
-                "Thank you for registering with us! Your account is currently under review by our admin team to ensure all details are accurate and complete. Please be assured that we are working diligently to process your request. To stay informed on the status of your account, we encourage you to check back daily for updates on your verification process. We appreciate your patience and look forward to providing you with an exceptional experience once your account is fully verified. Regards, The Lost and Found Team", // your full message here
+              title,
+              message,
             }),
           }
         );
@@ -315,13 +317,38 @@ router.post(
         if (!newResponse.ok) {
           console.error("Notification failed:", await newResponse.text());
         }
+
+        // Send email
+        const mailOptions = {
+          from: `"Lost & Found System" <${process.env.SMTP_USER}>`,
+          to: user.email,
+          subject: title,
+          html: message,
+        };
+
+        try {
+          await transporter.sendMail(mailOptions);
+          return res.status(201).json({
+            success: true,
+            message: "Account created successfully. Email sent.",
+            user,
+          });
+        } catch (emailError) {
+          console.error("Email error:", emailError);
+          return res.status(201).json({
+            success: true,
+            message: "Account created. Email failed to send.",
+            user,
+          });
+        }
       } catch (notificationError) {
         console.error("Notification error:", notificationError);
+        return res.status(201).json({
+          success: true,
+          message: "Account created. Notification/email may have failed.",
+          user,
+        });
       }
-
-      res
-        .status(201)
-        .json({ success: true, message: "Account created successfully", user });
     } catch (error) {
       console.error("Signup error:", error);
       res.status(500).json({
@@ -332,6 +359,7 @@ router.post(
     }
   }
 );
+
 
 router.delete("/deleteUser/:userId", authMiddleWare, async (req, res) => {
   try {
@@ -344,26 +372,33 @@ router.delete("/deleteUser/:userId", authMiddleWare, async (req, res) => {
     }
 
     //  Prevent non-admin from deleting others
-    if (loggedInUser.role !== "admin" && loggedInUser._id.toString() !== userId) {
-      return res.status(403).json({ message: "Access denied. You can only delete your own account." });
+    if (
+      loggedInUser.role !== "admin" &&
+      loggedInUser._id.toString() !== userId
+    ) {
+      return res
+        .status(403)
+        .json({
+          message: "Access denied. You can only delete your own account.",
+        });
     }
 
     //  Prevent users from deleting admins
     if (userToDelete.role === "admin" && loggedInUser.role !== "admin") {
-      return res.status(403).json({ message: "Access denied. You cannot delete an admin." });
+      return res
+        .status(403)
+        .json({ message: "Access denied. You cannot delete an admin." });
     }
 
     await User.findByIdAndDelete(userId);
     res.json({ message: "User deleted successfully." });
-
   } catch (error) {
     console.error("Error deleting user:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-
-router.get("/getUser/:id", authMiddleWare,async (req, res) => {
+router.get("/getUser/:id", authMiddleWare, async (req, res) => {
   try {
     const { id } = req.params;
     const user = await User.findById(id);
@@ -418,14 +453,16 @@ router.get("/getAllUser", authMiddleWare, async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-router.post("/getUserEmail",  async (req, res) => {
-    const{email}= req.body;
+router.post("/getUserEmail", async (req, res) => {
+  const { email } = req.body;
   try {
-    const user = await User.findOne({email});
-    if(user){
-        const token = jwt.sign({ email }, process.env.SECRET_KEY, { expiresIn: "15m" });
-         res.json({success: true, name: user.name, token});
-    }else {
+    const user = await User.findOne({ email });
+    if (user) {
+      const token = jwt.sign({ email }, process.env.SECRET_KEY, {
+        expiresIn: "15m",
+      });
+      res.json({ success: true, name: user.name, token });
+    } else {
       res.json({ success: false, message: "User not found" });
     }
   } catch (error) {
@@ -435,25 +472,27 @@ router.post("/getUserEmail",  async (req, res) => {
 });
 router.post("/reset-password", async (req, res) => {
   const { token, newPassword } = req.body;
-  
 
   try {
     const decoded = jwt.verify(token, process.env.SECRET_KEY);
     const user = await User.findOne({ email: decoded.email });
 
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(newPassword, salt);
     await user.save();
 
     res.json({ success: true, message: "Password changed successfully" });
-
   } catch (err) {
-    return res.status(400).json({ success: false, message: "Invalid or expired token" });
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid or expired token" });
   }
 });
-
 
 router.post("/login", async (req, res) => {
   const { email, password, cnic, loginType } = req.body;
@@ -553,7 +592,7 @@ router.post("/get-foundItemsByIds", authMiddleWare, async (req, res) => {
     res.status(500).json({ success: false, message: "Error fetching items" });
   }
 });
-router.get("/get-foundItemById/:id",authMiddleWare, async (req, res) => {
+router.get("/get-foundItemById/:id", authMiddleWare, async (req, res) => {
   const { id } = req.params;
   try {
     const foundItem = await FoundItems.findById(id); // correct method
@@ -630,7 +669,7 @@ router.post(
   }
 );
 
-router.put("/verifyLostItems/:id", authMiddleWare,async (req, res) => {
+router.put("/verifyLostItems/:id", authMiddleWare, async (req, res) => {
   const { id } = req.params;
   const { request } = req.body;
 
@@ -656,7 +695,7 @@ router.put("/verifyLostItems/:id", authMiddleWare,async (req, res) => {
   }
 });
 
-router.put("/verifyFoundItems/:id", authMiddleWare,async (req, res) => {
+router.put("/verifyFoundItems/:id", authMiddleWare, async (req, res) => {
   const { id } = req.params;
   const { request } = req.body;
 
@@ -736,19 +775,46 @@ router.post(
 );
 router.post("/pushNotification", async (req, res) => {
   const { userId, title, message } = req.body;
+
   try {
-    const notification = new Notifications({
-      userId,
-      title,
-      message,
-    });
+    const notification = new Notifications({ userId, title, message });
     await notification.save();
-    res.json({ message: "Notification added successfully" });
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const mailOptions = {
+      from: `"Lost & Found System" <${process.env.SMTP_USER}>`,
+      to: user.email,
+      subject: title,
+      html: message,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      return res
+        .status(200)
+        .json({ message: "Notification added and email sent successfully" });
+    } catch (emailError) {
+      console.error("Email error:", emailError);
+      return res
+        .status(500)
+        .json({
+          message: "Notification added but failed to send email",
+          error: emailError,
+        });
+    }
   } catch (error) {
-    res.status(500).json({ message: "Error adding Notification", error });
+    return res
+      .status(500)
+      .json({ message: "Error adding notification", error });
   }
 });
-router.get("/get-notifications/:userId", authMiddleWare,async (req, res) => {
+
+router.get("/get-notifications/:userId", authMiddleWare, async (req, res) => {
   const { userId } = req.params;
   try {
     const notifications = await Notifications.find({ userId }).sort({
@@ -825,7 +891,7 @@ router.get("/get-lostItems", authMiddleWare, async (req, res) => {
     res.status(500).json({ success: false, message: "Error searching items" });
   }
 });
-router.post("/postSavedItems",authMiddleWare, async (req, res) => {
+router.post("/postSavedItems", authMiddleWare, async (req, res) => {
   const { userId, itemId } = req.body;
   try {
     const savedItems = new SavedItems({
@@ -838,7 +904,7 @@ router.post("/postSavedItems",authMiddleWare, async (req, res) => {
     res.status(500).json({ message: "Error adding SavedItems", error });
   }
 });
-router.get("/get-savedItems", authMiddleWare,async (req, res) => {
+router.get("/get-savedItems", authMiddleWare, async (req, res) => {
   try {
     const saveditems = await SavedItems.find().sort({ createdAt: -1 });
     res.json({ success: true, saveditems });
@@ -848,7 +914,7 @@ router.get("/get-savedItems", authMiddleWare,async (req, res) => {
       .json({ success: false, message: "Error searching saved items" });
   }
 });
-router.put("/delete-savedItems/:id", authMiddleWare,async (req, res) => {
+router.put("/delete-savedItems/:id", authMiddleWare, async (req, res) => {
   const { id } = req.params;
   try {
     const saveditems = await SavedItems.findByIdAndUpdate(
