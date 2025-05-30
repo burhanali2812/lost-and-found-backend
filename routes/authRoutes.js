@@ -191,6 +191,7 @@ router.delete("/delete-image/:id", authMiddleWare, async (req, res) => {
     res.status(500).json({ success: false, message: "Error deleting image" });
   }
 });
+
 router.post(
   "/signup",
   upload.fields([
@@ -493,6 +494,30 @@ router.post("/reset-password", async (req, res) => {
       .json({ success: false, message: "Invalid or expired token" });
   }
 });
+router.post("/verify-password", authMiddleWare, async (req, res) => {
+  const { password } = req.body;
+
+  try {
+    const user = await User.findOne({ _id: req.user._id });
+
+    if (!user) {
+      return res.status(400).json({ message: "User not found" });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid Password" });
+    }
+
+    return res.status(200).json({ message: "Password verified successfully" });
+
+  } catch (error) {
+    console.error("Error verifying password:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+});
+
 
 router.post("/login", async (req, res) => {
   const { email, password, cnic, loginType } = req.body;
