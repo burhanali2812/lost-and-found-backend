@@ -361,7 +361,6 @@ router.post(
   }
 );
 
-
 router.delete("/deleteUser", authMiddleWare, async (req, res) => {
   try {
     const loggedInUser = req.user; // Extracted from token by authMiddleware
@@ -441,7 +440,7 @@ router.get("/getAllUser", authMiddleWare, async (req, res) => {
       return res.status(404).json({ message: "User not found." });
     }
 
-    res.json({ users: [user] });  // Return array with single user for consistency
+    res.json({ users: [user] }); // Return array with single user for consistency
   } catch (error) {
     console.error("Error fetching users:", error);
     res.status(500).json({ message: "Server error" });
@@ -489,25 +488,44 @@ router.post("/reset-password", async (req, res) => {
   }
 });
 router.post("/verify-password", authMiddleWare, async (req, res) => {
-  const { password } = req.body;
+  const { password, action } = req.body;
+
+  console.log("🔍 Received action:", action); // Add this
+  console.log("🔐 Authenticated user:", req.user);
 
   try {
-    const user = await User.findOne({ _id: req.user._id });
-
+    const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(400).json({ message: "User not found" });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid Password" });
     }
 
+    // 🔁 Normalize action comparison
+   if (action && action.trim().toLowerCase() === "password") {
+  const token = jwt.sign(
+    { email: user.email },
+    process.env.SECRET_KEY,
+    { expiresIn: "15m" }
+  );
+
+  console.log("✅ Password match — sending token:", token); // Add this to verify token generation
+  return res.json({
+    success: true,
+    name: user.name,
+    token,
+    message: "Password change check verified successfully"
+  });
+}
+
+    console.log("✅ Password verified but action is not 'password'");
     return res.status(200).json({ message: "Password verified successfully" });
 
   } catch (error) {
-    console.error("Error verifying password:", error);
+    console.error("❌ Error verifying password:", error);
     return res.status(500).json({ message: "Server Error" });
   }
 });
@@ -819,12 +837,10 @@ router.post("/pushNotification", async (req, res) => {
         .json({ message: "Notification added and email sent successfully" });
     } catch (emailError) {
       console.error("Email error:", emailError);
-      return res
-        .status(500)
-        .json({
-          message: "Notification added but failed to send email",
-          error: emailError,
-        });
+      return res.status(500).json({
+        message: "Notification added but failed to send email",
+        error: emailError,
+      });
     }
   } catch (error) {
     return res
