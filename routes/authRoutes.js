@@ -362,36 +362,23 @@ router.post(
 );
 
 
-router.delete("/deleteUser/:userId", authMiddleWare, async (req, res) => {
+router.delete("/deleteUser", authMiddleWare, async (req, res) => {
   try {
-    const { userId } = req.params;
-    const loggedInUser = req.user; // full user object from auth middleware
+    const loggedInUser = req.user; // Extracted from token by authMiddleware
 
-    const userToDelete = await User.findById(userId);
+    const userToDelete = await User.findById(loggedInUser._id);
     if (!userToDelete) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    //  Prevent non-admin from deleting others
-    if (
-      loggedInUser.role !== "admin" &&
-      loggedInUser._id.toString() !== userId
-    ) {
-      return res
-        .status(403)
-        .json({
-          message: "Access denied. You can only delete your own account.",
-        });
-    }
-
-    //  Prevent users from deleting admins
+    // Prevent users from deleting admin accounts (unless they are admin themselves)
     if (userToDelete.role === "admin" && loggedInUser.role !== "admin") {
       return res
         .status(403)
         .json({ message: "Access denied. You cannot delete an admin." });
     }
 
-    await User.findByIdAndDelete(userId);
+    await User.findByIdAndDelete(loggedInUser._id);
     res.json({ message: "User deleted successfully." });
   } catch (error) {
     console.error("Error deleting user:", error);
@@ -442,18 +429,25 @@ router.put("/verifyUser/:id", authMiddleWare, async (req, res) => {
 
 router.get("/getAllUser", authMiddleWare, async (req, res) => {
   try {
-    // Ensure only admins can access
-    if (req.user.role !== "admin") {
-      return res.status(403).json({ message: "Access denied. Admins only." });
+    if (req.user.role === "admin") {
+      // Admin gets all users
+      const users = await User.find();
+      return res.json({ users });
     }
 
-    const users = await User.find();
-    res.json({ users });
+    // Non-admins can only access their own user data
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    res.json({ users: [user] });  // Return array with single user for consistency
   } catch (error) {
     console.error("Error fetching users:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
+
 router.post("/getUserEmail", async (req, res) => {
   const { email } = req.body;
   try {
