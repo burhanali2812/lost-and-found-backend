@@ -517,11 +517,9 @@ router.post("/verify-password", authMiddleWare, async (req, res) => {
     success: true,
     name: user.name,
     token,
-    message: "Password change check verified successfully"
+    message: "Password verified successfully"
   });
 }
-
-    console.log("✅ Password verified but action is not 'password'");
     return res.status(200).json({ message: "Password verified successfully" });
 
   } catch (error) {
