@@ -361,6 +361,80 @@ router.post(
   }
 );
 
+router.put(
+  "/update-profile",
+  authMiddleWare, 
+  upload.fields([
+    { name: "profileImage" },
+    { name: "frontCnic" },
+    { name: "backCnic" },
+  ]),
+  async (req, res) => {
+    const { name, address } = req.body;
+    const userId = req.user._id; // Get user ID from auth middleware
+
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (address) updateData.address = address;
+
+    try {
+      const uploadFile = async (file) => {
+        if (!file) return null;
+        try {
+          const mimetype = file[0].mimetype;
+          let compressedBuffer;
+
+          const image = sharp(file[0].buffer).resize({ width: 1024 });
+
+          if (mimetype === "image/jpeg" || mimetype === "image/jpg") {
+            compressedBuffer = await image.jpeg({ quality: 70 }).toBuffer();
+          } else if (mimetype === "image/png") {
+            compressedBuffer = await image.png({ quality: 80 }).toBuffer();
+          } else {
+            compressedBuffer = await image.jpeg({ quality: 70 }).toBuffer();
+          }
+
+          const result = await uploadToCloudinary(
+            compressedBuffer,
+            "lost-and-found/user-documents"
+          );
+          return result.secure_url;
+        } catch (error) {
+          console.error("Cloudinary upload error:", error);
+          return null;
+        }
+      };
+
+      const files = req.files;
+      if (files?.profileImage)
+        updateData.profileImage = await uploadFile(files.profileImage);
+      if (files?.frontCnic)
+        updateData.frontCnic = await uploadFile(files.frontCnic);
+      if (files?.backCnic)
+        updateData.backCnic = await uploadFile(files.backCnic);
+
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { $set: updateData },
+        { new: true }
+      );
+
+      if (!updatedUser) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Profile updated successfully",
+        user: updatedUser,
+      });
+    } catch (error) {
+      console.error("Update error:", error);
+      res.status(500).json({ success: false, message: "Server error" });
+    }
+  }
+);
+
 router.delete("/deleteUser", authMiddleWare, async (req, res) => {
   try {
     const loggedInUser = req.user; // Extracted from token by authMiddleware
