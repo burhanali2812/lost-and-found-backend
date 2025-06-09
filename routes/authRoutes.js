@@ -193,7 +193,7 @@ router.delete("/delete-image/:id", authMiddleWare, async (req, res) => {
 });
 router.post("/checkExistEmail", async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email , cnic} = req.body;
     const [existingEmail, existingCnic] = await Promise.all([
       User.findOne({ email }),
       User.findOne({ cnic }),
