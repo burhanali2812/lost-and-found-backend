@@ -191,6 +191,25 @@ router.delete("/delete-image/:id", authMiddleWare, async (req, res) => {
     res.status(500).json({ success: false, message: "Error deleting image" });
   }
 });
+router.post("/checkExistEmail", async (req, res) => {
+  try {
+    const { email } = req.body;
+    const [existingEmail, existingCnic] = await Promise.all([
+      User.findOne({ email }),
+      User.findOne({ cnic }),
+    ]);
+
+    if (existingEmail)
+      return res.status(400).json({ message: "Email is already registered" });
+    if (existingCnic)
+      return res.status(400).json({ message: "CNIC is already registered" });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Signup failed",
+    });
+  }
+});
 
 router.post(
   "/signup",
@@ -363,7 +382,7 @@ router.post(
 
 router.put(
   "/update-profile",
-  authMiddleWare, 
+  authMiddleWare,
   upload.fields([
     { name: "profileImage" },
     { name: "frontCnic" },
@@ -420,7 +439,9 @@ router.put(
       );
 
       if (!updatedUser) {
-        return res.status(404).json({ success: false, message: "User not found" });
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
       }
 
       res.status(200).json({
@@ -579,29 +600,25 @@ router.post("/verify-password", authMiddleWare, async (req, res) => {
     }
 
     // 🔁 Normalize action comparison
-   if (action && action.trim().toLowerCase() === "password") {
-  const token = jwt.sign(
-    { email: user.email },
-    process.env.SECRET_KEY,
-    { expiresIn: "15m" }
-  );
+    if (action && action.trim().toLowerCase() === "password") {
+      const token = jwt.sign({ email: user.email }, process.env.SECRET_KEY, {
+        expiresIn: "15m",
+      });
 
-  console.log("✅ Password match — sending token:", token); // Add this to verify token generation
-  return res.json({
-    success: true,
-    name: user.name,
-    token,
-    message: "Password verified successfully"
-  });
-}
+      console.log("✅ Password match — sending token:", token); // Add this to verify token generation
+      return res.json({
+        success: true,
+        name: user.name,
+        token,
+        message: "Password verified successfully",
+      });
+    }
     return res.status(200).json({ message: "Password verified successfully" });
-
   } catch (error) {
     console.error("❌ Error verifying password:", error);
     return res.status(500).json({ message: "Server Error" });
   }
 });
-
 
 router.post("/login", async (req, res) => {
   const { email, password, cnic, loginType } = req.body;
