@@ -249,7 +249,6 @@ router.post("/signup/step1", async (req, res) => {
       phone,
       cnic,
       address,
-      password: null, // will be added in step 2
     });
 
     await user.save();
