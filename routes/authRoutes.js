@@ -265,7 +265,7 @@ router.post("/signup/step1", async (req, res) => {
     });
   }
 });
-router.post("/signup/step2", async (req, res) => {
+router.post("/signup/step3", async (req, res) => {
   const { userId, password , token} = req.body;
 
   if (!userId || !password) {
@@ -308,7 +308,7 @@ router.post("/signup/step2", async (req, res) => {
 
 
 router.post(
-  "/signup/step3",
+  "/signup/step2",
   upload.fields([
     { name: "profileImage" },
     { name: "frontCnic" },
@@ -320,9 +320,7 @@ router.post(
     if (!userId) {
       return res.status(400).json({ success: false, message: "Missing user ID" });
     }
-      if (!token) {
-      return res.status(400).json({ success: false, message: "Missing reCAPTCHA Token" });
-    }
+      
 
     try {
       
