@@ -211,6 +211,194 @@ router.post("/checkExistEmail", async (req, res) => {
   }
 });
 
+
+
+router.post("/signup/step1", async (req, res) => {
+  const { name, email, phone, cnic, address } = req.body;
+
+  if (!name || !email || !phone || !cnic || !address) {
+    return res.status(400).json({
+      success: false,
+      message: "All fields are required",
+    });
+  }
+
+  try {
+    // Check for duplicates
+    const [existingEmail, existingCnic] = await Promise.all([
+      User.findOne({ email }),
+      User.findOne({ cnic }),
+    ]);
+
+    if (existingEmail) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Email is already registered" });
+    }
+
+    if (existingCnic) {
+      return res
+        .status(400)
+        .json({ success: false, message: "CNIC is already registered" });
+    }
+
+    // Create user with personal info only
+    const user = new User({
+      name,
+      email,
+      phone,
+      cnic,
+      address,
+      password: null, // will be added in step 2
+    });
+
+    await user.save();
+
+    return res
+      .status(201)
+      .json({ success: true, message: "Step 1 completed", userId: user._id });
+  } catch (error) {
+    console.error("Signup step1 error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Signup failed",
+      error: error.message,
+    });
+  }
+});
+router.post("/signup/step2", async (req, res) => {
+  const { userId, password , token} = req.body;
+
+  if (!userId || !password) {
+    return res.status(400).json({ success: false, message: "User ID and password are required" });
+  }
+
+  try {
+
+     const response = await axios.post(
+      `https://www.google.com/recaptcha/api/siteverify`,
+      null,
+      {
+        params: {
+          secret: process.env.RECAPTCHA_SECRET,
+          response: token,
+        },
+      }
+    );
+
+    if (!response.data.success) {
+      return res.status(400).json({ success: false, message: "reCAPTCHA failed" });
+    }
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    user.password = hashedPassword;
+    await user.save();
+
+    return res.status(200).json({ success: true, message: "Password saved successfully" });
+  } catch (error) {
+    console.error("Signup step2 error:", error);
+    return res.status(500).json({ success: false, message: "Failed to save password", error: error.message });
+  }
+});
+
+
+
+
+router.post(
+  "/signup/step3",
+  upload.fields([
+    { name: "profileImage" },
+    { name: "frontCnic" },
+    { name: "backCnic" },
+  ]),
+  async (req, res) => {
+    const { userId} = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "Missing user ID" });
+    }
+      if (!token) {
+      return res.status(400).json({ success: false, message: "Missing reCAPTCHA Token" });
+    }
+
+    try {
+      
+      const user = await User.findById(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      // Upload handler
+      const uploadFile = async (file) => {
+        if (!file) return null;
+        try {
+          const mimetype = file[0].mimetype;
+          let compressedBuffer;
+          const image = sharp(file[0].buffer).resize({ width: 1024 });
+
+          if (mimetype === "image/jpeg" || mimetype === "image/jpg") {
+            compressedBuffer = await image.jpeg({ quality: 70 }).toBuffer();
+          } else if (mimetype === "image/png") {
+            compressedBuffer = await image.png({ quality: 80 }).toBuffer();
+          } else {
+            compressedBuffer = await image.jpeg({ quality: 70 }).toBuffer();
+          }
+
+          const result = await uploadToCloudinary(
+            compressedBuffer,
+            "lost-and-found/user-documents"
+          );
+          return result.secure_url;
+        } catch (uploadError) {
+          console.error("Upload error:", uploadError);
+          throw new Error("Image upload failed");
+        }
+      };
+
+      const [profileImage, frontCnic, backCnic] = await Promise.all([
+        uploadFile(req.files["profileImage"]),
+        uploadFile(req.files["frontCnic"]),
+        uploadFile(req.files["backCnic"]),
+      ]);
+
+      // Update user record
+      user.profileImage = profileImage;
+      user.frontCnic = frontCnic;
+      user.backCnic = backCnic;
+      await user.save();
+
+      // Send notification & email
+      const title = "Account Verification Pending – Stay Updated!";
+     const message =
+        "Thank you for registering with us! Your account is currently under review by our admin team to ensure all details are accurate and complete. Please be assured that we are working diligently to process your request. To stay informed on the status of your account, we encourage you to check back daily for updates on your verification process. We appreciate your patience and look forward to providing you with an exceptional experience once your account is fully verified.<br><br>Regards,<br>The Lost and Found Team";
+      // Send notification
+      await fetch("https://lost-and-found-backend-xi.vercel.app/auth/pushNotification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, title, message }),
+      });
+
+      // Send email
+      await transporter.sendMail({
+        from: `"Lost & Found" <${process.env.SMTP_USER}>`,
+        to: user.email,
+        subject: title,
+        html: message,
+      });
+
+      res.status(200).json({ success: true, message: "Documents uploaded successfully", user });
+    } catch (error) {
+      console.error("Signup step2 error:", error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+
+
+
 router.post(
   "/signup",
   upload.fields([
