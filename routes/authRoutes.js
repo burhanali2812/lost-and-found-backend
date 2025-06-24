@@ -193,7 +193,7 @@ router.delete("/delete-image/:id", authMiddleWare, async (req, res) => {
 });
 router.post("/checkExistEmail", async (req, res) => {
   try {
-    const { email , cnic} = req.body;
+    const { email , cnic } = req.body;
     const [existingEmail, existingCnic] = await Promise.all([
       User.findOne({ email }),
       User.findOne({ cnic }),
@@ -203,6 +203,8 @@ router.post("/checkExistEmail", async (req, res) => {
       return res.status(400).json({ message: "Email is already registered" });
     if (existingCnic)
       return res.status(400).json({ message: "CNIC is already registered" });
+
+    return res.status(200).json({ message: "Email and CNIC are available" });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -210,6 +212,7 @@ router.post("/checkExistEmail", async (req, res) => {
     });
   }
 });
+
 
 
 
@@ -271,6 +274,10 @@ router.post("/signup/step3", async (req, res) => {
   if (!userId || !password) {
     return res.status(400).json({ success: false, message: "User ID and password are required" });
   }
+  if (!token) {
+  return res.status(400).json({ success: false, message: "reCAPTCHA token is missing" });
+}
+
 
   try {
 
@@ -299,7 +306,7 @@ router.post("/signup/step3", async (req, res) => {
 
     return res.status(200).json({ success: true, message: "Password saved successfully" });
   } catch (error) {
-    console.error("Signup step2 error:", error);
+    console.error("Signup step3 error:", error);
     return res.status(500).json({ success: false, message: "Failed to save password", error: error.message });
   }
 });
@@ -396,174 +403,174 @@ router.post(
 
 
 
-router.post(
-  "/signup",
-  upload.fields([
-    { name: "profileImage" },
-    { name: "frontCnic" },
-    { name: "backCnic" },
-  ]),
-  async (req, res) => {
-    const { name, email, password, phone, cnic, address, token } = req.body;
+// router.post(
+//   "/signup",
+//   upload.fields([
+//     { name: "profileImage" },
+//     { name: "frontCnic" },
+//     { name: "backCnic" },
+//   ]),
+//   async (req, res) => {
+//     const { name, email, password, phone, cnic, address, token } = req.body;
 
-    // Basic validation
-    if (!name || !email || !password || !phone || !cnic || !address || !token) {
-      return res
-        .status(400)
-        .json({ success: false, message: "All fields are required" });
-    }
+//     // Basic validation
+//     if (!name || !email || !password || !phone || !cnic || !address || !token) {
+//       return res
+//         .status(400)
+//         .json({ success: false, message: "All fields are required" });
+//     }
 
-    try {
-      // Verify reCAPTCHA
-      const response = await axios.post(
-        `https://www.google.com/recaptcha/api/siteverify`,
-        null,
-        {
-          params: {
-            secret: process.env.RECAPTCHA_SECRET,
-            response: token,
-          },
-        }
-      );
+//     try {
+//       // Verify reCAPTCHA
+//       const response = await axios.post(
+//         `https://www.google.com/recaptcha/api/siteverify`,
+//         null,
+//         {
+//           params: {
+//             secret: process.env.RECAPTCHA_SECRET,
+//             response: token,
+//           },
+//         }
+//       );
 
-      if (!response.data.success) {
-        return res
-          .status(400)
-          .json({ success: false, message: "reCAPTCHA failed" });
-      }
+//       if (!response.data.success) {
+//         return res
+//           .status(400)
+//           .json({ success: false, message: "reCAPTCHA failed" });
+//       }
 
-      // Check for existing user
-      const [existingEmail, existingCnic] = await Promise.all([
-        User.findOne({ email }),
-        User.findOne({ cnic }),
-      ]);
+//       // Check for existing user
+//       const [existingEmail, existingCnic] = await Promise.all([
+//         User.findOne({ email }),
+//         User.findOne({ cnic }),
+//       ]);
 
-      if (existingEmail)
-        return res.status(400).json({ message: "Email is already registered" });
-      if (existingCnic)
-        return res.status(400).json({ message: "CNIC is already registered" });
+//       if (existingEmail)
+//         return res.status(400).json({ message: "Email is already registered" });
+//       if (existingCnic)
+//         return res.status(400).json({ message: "CNIC is already registered" });
 
-      // Hash password
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
+//       // Hash password
+//       const salt = await bcrypt.genSalt(10);
+//       const hashedPassword = await bcrypt.hash(password, salt);
 
-      // Upload files to Cloudinary
-      const uploadFile = async (file) => {
-        if (!file) return null;
-        try {
-          const mimetype = file[0].mimetype;
-          let compressedBuffer;
+//       // Upload files to Cloudinary
+//       const uploadFile = async (file) => {
+//         if (!file) return null;
+//         try {
+//           const mimetype = file[0].mimetype;
+//           let compressedBuffer;
 
-          const image = sharp(file[0].buffer).resize({ width: 1024 });
+//           const image = sharp(file[0].buffer).resize({ width: 1024 });
 
-          if (mimetype === "image/jpeg" || mimetype === "image/jpg") {
-            compressedBuffer = await image.jpeg({ quality: 70 }).toBuffer();
-          } else if (mimetype === "image/png") {
-            compressedBuffer = await image.png({ quality: 80 }).toBuffer();
-          } else if (mimetype === "image/webp") {
-            compressedBuffer = await image.webp({ quality: 75 }).toBuffer();
-          } else {
-            // fallback to jpeg
-            compressedBuffer = await image.jpeg({ quality: 70 }).toBuffer();
-          }
+//           if (mimetype === "image/jpeg" || mimetype === "image/jpg") {
+//             compressedBuffer = await image.jpeg({ quality: 70 }).toBuffer();
+//           } else if (mimetype === "image/png") {
+//             compressedBuffer = await image.png({ quality: 80 }).toBuffer();
+//           } else if (mimetype === "image/webp") {
+//             compressedBuffer = await image.webp({ quality: 75 }).toBuffer();
+//           } else {
+//             // fallback to jpeg
+//             compressedBuffer = await image.jpeg({ quality: 70 }).toBuffer();
+//           }
 
-          const result = await uploadToCloudinary(
-            compressedBuffer,
-            "lost-and-found/user-documents"
-          );
-          return result.secure_url;
-        } catch (uploadError) {
-          console.error("Cloudinary upload error:", uploadError);
-          throw new Error("Failed to upload document");
-        }
-      };
+//           const result = await uploadToCloudinary(
+//             compressedBuffer,
+//             "lost-and-found/user-documents"
+//           );
+//           return result.secure_url;
+//         } catch (uploadError) {
+//           console.error("Cloudinary upload error:", uploadError);
+//           throw new Error("Failed to upload document");
+//         }
+//       };
 
-      const [profileImage, frontCnic, backCnic] = await Promise.all([
-        uploadFile(req.files["profileImage"]),
-        uploadFile(req.files["frontCnic"]),
-        uploadFile(req.files["backCnic"]),
-      ]);
+//       const [profileImage, frontCnic, backCnic] = await Promise.all([
+//         uploadFile(req.files["profileImage"]),
+//         uploadFile(req.files["frontCnic"]),
+//         uploadFile(req.files["backCnic"]),
+//       ]);
 
-      // Create user
-      const user = new User({
-        name,
-        email,
-        password: hashedPassword,
-        phone,
-        cnic,
-        address,
-        profileImage,
-        frontCnic,
-        backCnic,
-      });
+//       // Create user
+//       const user = new User({
+//         name,
+//         email,
+//         password: hashedPassword,
+//         phone,
+//         cnic,
+//         address,
+//         profileImage,
+//         frontCnic,
+//         backCnic,
+//       });
 
-      await user.save();
+//       await user.save();
 
-      // Send notification and email
-      const title = "Account Verification Pending – Stay Updated!";
-      const message =
-        "Thank you for registering with us! Your account is currently under review by our admin team to ensure all details are accurate and complete. Please be assured that we are working diligently to process your request. To stay informed on the status of your account, we encourage you to check back daily for updates on your verification process. We appreciate your patience and look forward to providing you with an exceptional experience once your account is fully verified.<br><br>Regards,<br>The Lost and Found Team";
+//       // Send notification and email
+//       const title = "Account Verification Pending – Stay Updated!";
+//       const message =
+//         "Thank you for registering with us! Your account is currently under review by our admin team to ensure all details are accurate and complete. Please be assured that we are working diligently to process your request. To stay informed on the status of your account, we encourage you to check back daily for updates on your verification process. We appreciate your patience and look forward to providing you with an exceptional experience once your account is fully verified.<br><br>Regards,<br>The Lost and Found Team";
 
-      try {
-        // Trigger internal notification
-        const newResponse = await fetch(
-          `https://lost-and-found-backend-xi.vercel.app/auth/pushNotification`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              userId: user._id,
-              title,
-              message,
-            }),
-          }
-        );
+//       try {
+//         // Trigger internal notification
+//         const newResponse = await fetch(
+//           `https://lost-and-found-backend-xi.vercel.app/auth/pushNotification`,
+//           {
+//             method: "POST",
+//             headers: { "Content-Type": "application/json" },
+//             body: JSON.stringify({
+//               userId: user._id,
+//               title,
+//               message,
+//             }),
+//           }
+//         );
 
-        if (!newResponse.ok) {
-          console.error("Notification failed:", await newResponse.text());
-        }
+//         if (!newResponse.ok) {
+//           console.error("Notification failed:", await newResponse.text());
+//         }
 
-        // Send email
-        const mailOptions = {
-          from: `"Lost & Found System" <${process.env.SMTP_USER}>`,
-          to: user.email,
-          subject: title,
-          html: message,
-        };
+//         // Send email
+//         const mailOptions = {
+//           from: `"Lost & Found System" <${process.env.SMTP_USER}>`,
+//           to: user.email,
+//           subject: title,
+//           html: message,
+//         };
 
-        try {
-          await transporter.sendMail(mailOptions);
-          return res.status(201).json({
-            success: true,
-            message: "Account created successfully. Email sent.",
-            user,
-          });
-        } catch (emailError) {
-          console.error("Email error:", emailError);
-          return res.status(201).json({
-            success: true,
-            message: "Account created. Email failed to send.",
-            user,
-          });
-        }
-      } catch (notificationError) {
-        console.error("Notification error:", notificationError);
-        return res.status(201).json({
-          success: true,
-          message: "Account created. Notification/email may have failed.",
-          user,
-        });
-      }
-    } catch (error) {
-      console.error("Signup error:", error);
-      res.status(500).json({
-        success: false,
-        message: error.message || "Signup failed",
-        error: process.env.NODE_ENV === "development" ? error.stack : undefined,
-      });
-    }
-  }
-);
+//         try {
+//           await transporter.sendMail(mailOptions);
+//           return res.status(201).json({
+//             success: true,
+//             message: "Account created successfully. Email sent.",
+//             user,
+//           });
+//         } catch (emailError) {
+//           console.error("Email error:", emailError);
+//           return res.status(201).json({
+//             success: true,
+//             message: "Account created. Email failed to send.",
+//             user,
+//           });
+//         }
+//       } catch (notificationError) {
+//         console.error("Notification error:", notificationError);
+//         return res.status(201).json({
+//           success: true,
+//           message: "Account created. Notification/email may have failed.",
+//           user,
+//         });
+//       }
+//     } catch (error) {
+//       console.error("Signup error:", error);
+//       res.status(500).json({
+//         success: false,
+//         message: error.message || "Signup failed",
+//         error: process.env.NODE_ENV === "development" ? error.stack : undefined,
+//       });
+//     }
+//   }
+// );
 
 router.put(
   "/update-profile",
