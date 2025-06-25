@@ -44,7 +44,7 @@ router.post("/send-otp", async (req, res) => {
 
   const otp = generateOTP();
   otpMap.set(email, otp);
-  setTimeout(() => otpMap.delete(email), 120000);
+  setTimeout(() => otpMap.delete(email), 60000);
 
   const mailOptions = {
     from: `"Verify OTP" <${process.env.SMTP_USER}>`,
@@ -65,7 +65,7 @@ router.post("/send-otp", async (req, res) => {
       </p>
 
       <p style="text-align: center; font-size: 14px; color: #888; margin-bottom: 24px;">
-        This OTP is valid for <strong>2 minutes</strong>.
+        This OTP is valid for <strong>1 minute</strong>.
       </p>
 
       <p style="margin-bottom: 16px;">
@@ -304,6 +304,24 @@ router.post("/signup/step3", async (req, res) => {
     user.password = hashedPassword;
     await user.save();
 
+     const title = "Account Verification Pending – Stay Updated!";
+     const message =
+        "Thank you for registering with us! Your account is currently under review by our admin team to ensure all details are accurate and complete. Please be assured that we are working diligently to process your request. To stay informed on the status of your account, we encourage you to check back daily for updates on your verification process. We appreciate your patience and look forward to providing you with an exceptional experience once your account is fully verified.Regards,The Lost and Found Team";
+      // Send notification
+      await fetch("https://lost-and-found-backend-xi.vercel.app/auth/pushNotification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, title, message }),
+      });
+
+      // Send email
+      await transporter.sendMail({
+        from: `"Lost & Found" <${process.env.SMTP_USER}>`,
+        to: user.email,
+        subject: title,
+        html: message,
+      });
+
     return res.status(200).json({ success: true, message: "Password saved successfully" });
   } catch (error) {
     console.error("Signup step3 error:", error);
@@ -372,26 +390,6 @@ router.post(
       user.frontCnic = frontCnic;
       user.backCnic = backCnic;
       await user.save();
-
-      // Send notification & email
-      const title = "Account Verification Pending – Stay Updated!";
-     const message =
-        "Thank you for registering with us! Your account is currently under review by our admin team to ensure all details are accurate and complete. Please be assured that we are working diligently to process your request. To stay informed on the status of your account, we encourage you to check back daily for updates on your verification process. We appreciate your patience and look forward to providing you with an exceptional experience once your account is fully verified.<br><br>Regards,<br>The Lost and Found Team";
-      // Send notification
-      await fetch("https://lost-and-found-backend-xi.vercel.app/auth/pushNotification", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, title, message }),
-      });
-
-      // Send email
-      await transporter.sendMail({
-        from: `"Lost & Found" <${process.env.SMTP_USER}>`,
-        to: user.email,
-        subject: title,
-        html: message,
-      });
-
       res.status(200).json({ success: true, message: "Documents uploaded successfully", user });
     } catch (error) {
       console.error("Signup step2 error:", error);
