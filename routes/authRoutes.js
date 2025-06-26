@@ -91,6 +91,61 @@ router.post("/send-otp", async (req, res) => {
   }
 });
 
+router.post("/send-feedback", authMiddleWare, async (req, res) => {
+    const { comment } = req.body;
+
+  const { name, email, phone } = req.user;
+
+  if (!email || !name) {
+    return res.status(400).send("Missing email or name");
+  }
+  const adminEmail = "teamslostandfound@gmail.com";
+const mailOptions = {
+  from: `"Lost and Found System" <${process.env.SMTP_USER}>`,
+  to: adminEmail, 
+  subject: "New User Feedback Received",
+  html: `
+  <div style="font-family: system-ui, sans-serif, Arial; font-size: 16px; color: #333; max-width: 600px; margin: auto; padding: 24px; background-color: #f9f9f9; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+    <p style="border-top: 1px solid #eaeaea; padding-top: 16px;">
+      <strong>Dear Admin,</strong>
+    </p>
+
+    <p style="margin-bottom: 16px;">
+      A user has submitted feedback through the Lost and Found system. Below are the details:
+    </p>
+
+    <div style="margin-bottom: 16px;">
+      <p><strong>Name:</strong> ${name}</p>
+      <p><strong>Email:</strong> ${email}</p>
+      <p><strong>Contact:</strong> ${phone}</p>
+    </div>
+
+    <div style="background-color: #fffbe6; border-left: 4px solid #ffc107; padding: 16px; border-radius: 6px; margin-bottom: 24px;">
+      <p style="margin: 0;"><strong>User's Comment:</strong></p>
+      <p style="margin: 8px 0 0 0;">${comment}</p>
+    </div>
+
+    <p style="font-size: 14px; color: #666;">
+      Please review this feedback and take any necessary actions or note it for system improvements.
+    </p>
+
+    <p style="margin-top: 32px;">
+      Regards,<br>
+      <strong>Lost and Found System</strong>
+    </p>
+  </div>
+  `,
+};
+
+  try {
+    await transporter.sendMail(mailOptions);
+    res.status(200).send("FeedBack Sent");
+  } catch (error) {
+    console.error("Email error:", error);
+    res.status(500).send("Failed to send Feedback");
+  }
+});
+
 router.post("/verify-otp", (req, res) => {
   const { email, otp } = req.body;
 
