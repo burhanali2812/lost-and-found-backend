@@ -1315,6 +1315,21 @@ router.put("/delete-savedItems/:id", authMiddleWare, async (req, res) => {
       .json({ success: false, message: "Error searching saved items" });
   }
 });
+router.put("/delete-displayItems/:id", authMiddleWare, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const saveditems = await SavedItems.findByIdAndUpdate(
+      id,
+      { isDeletedFromDisplayed: true },
+      { new: true }
+    );
+    res.json({ success: true, message: "Deleted" });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ success: false, message: "Error searching saved items" });
+  }
+});
 router.put("/save-item/:id", authMiddleWare, async (req, res) => {
   const { id } = req.params;
   const { isSaved } = req.body;

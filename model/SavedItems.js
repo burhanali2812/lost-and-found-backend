@@ -4,6 +4,8 @@ const savedItemsSchema = new mongoose.Schema({
     itemId: { type: mongoose.Schema.Types.ObjectId, ref: "LostItems", required: true }, 
     isSaved: { type: Boolean, default: false},
     isDeleted: { type: Boolean, default: false},
+    isDeletedFromDisplayed: { type: Boolean, default: false},
+    createdAt: { type: Date, default: Date.now },
     SavedAt: { type: Date},
 })
 
